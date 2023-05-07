@@ -2,9 +2,31 @@
 S3 Point-In-Time Report (s3pitr) is a tool designed to generate a detailed report of an S3 bucket's state at a specific point in time. The bucket must be versioned to utilize this tool. The generated report can be used in conjunction with AWS S3 Batch Operations to restore the bucket to the desired point in time by copying the files listed in the report.
 
 
+## Motivation
+s3pitr was developed to address the need for an efficient, fast, and easy-to-use tool for generating Point-In-Time Reports (PITR) for Amazon S3 buckets. Such a tool is particularly useful in scenarios involving ransomware attacks or accidental deletions. By inputting a timestamp, s3pitr creates a manifest that is compatible with AWS Batch Operations, enabling users to restore an S3 bucket to its desired state by copying or recreating the necessary objects.
+
+
+Before the creation of s3pitr, the following alternatives were examined:
+
+
+1. **AWS Inventory reports:** Generating these reports can take over 24 hours, making them unsuitable for situations where a shorter Recovery Time Objective (RTO) is required. In some cases, waiting for a lengthy period between reports is not feasible. Furthermore, creating a manifest of relevant objects for restoration requires significant manual effort in CSV manipulation.
+2. **AWS blog article on PITR for S3 buckets:** [This article](https://aws.amazon.com/blogs/storage/point-in-time-restore-for-amazon-s3-buckets/) suggests an alternative with a tighter RTO and PITR report generation. However, the method is more complicated, involving multiple steps and components. It also requires ongoing monitoring and management of operations and events after object creation.
+
+
+s3pitr overcomes these limitations by offering a straightforward, fast, and effective solution for generating PITR reports for S3 buckets, especially in situations where shorter RTOs are crucial.
+
+
 ## Compiling and Usage
+
+### Requirements
+Before using s3pitr, make sure you meet the following requirements:
+1. **Go**: s3pitr was developed using Go 1.20. It might be compatible with older versions, but this has not been tested. To ensure a smooth experience, it's recommended to use Go 1.20 or later.
+2. **AWS Permissions:** To run s3pitr, your AWS account must have sufficient permissions. The following AWS Identity and Access Management (IAM) permissions are required:
+    * `s3:GetBucketVersioning`: This permission is necessary to retrieve the versioning status of the specified S3 bucket.
+    * `s3:ListObjectVersions`: This permission is required to list the object versions in the specified S3 bucket.
+
 ### Compiling
-To compile the project, make sure you have Go(1.20+) installed on your system. Then, navigate to the project directory and run:
+To compile the project, navigate to the project directory and run:
 
 ```bash
 go build -o s3pitr main.go
