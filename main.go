@@ -25,6 +25,7 @@ const (
 )
 
 var (
+	startTime          = time.Now()
 	targetRestoreTime  time.Time
 	bucketName         string
 	reportName         string
@@ -78,7 +79,6 @@ func main() {
 	spinner := spinner.New(spinner.CharSets[32], 100*time.Millisecond)
 	spinner.Prefix = fmt.Sprintf("Scanning bucket: %v ", bucketName)
 	spinner.Start()
-	defer spinner.Stop()
 
 	// Scan S3 bucket and store objects in BadgerDB
 	scanResult, err := scanner.Scan(bucketName, func(obj *s3scanner.S3Object) error {
@@ -132,11 +132,15 @@ func main() {
 		log.Fatal("Error creating CSV report: ", err)
 	}
 
+	// stop spinner
+	spinner.Stop()
+
 	// Print scan results
-	log.Println("\n---Statistics---")
-	log.Println("Number of Pages: ", scanResult.Pages)
-	log.Println("Number of Objects: ", scanResult.Objects)
-	log.Printf("Scanning Cost: %0.5f$\n", scanResult.Cost())
+	fmt.Println("---Statistics---")
+	fmt.Println("Number of Pages: ", scanResult.Pages)
+	fmt.Println("Number of Objects: ", scanResult.Objects)
+	fmt.Printf("Scanning Cost: %0.5f$\n", scanResult.Cost())
+	fmt.Printf("Execution Time: %s\n", time.Since(startTime).Round(time.Second))
 }
 
 func parseFlags() error {
@@ -163,7 +167,7 @@ func parseFlags() error {
 
 	if timestampInput == "" {
 		// If not provided, use current time (good for inventory reports)
-		targetRestoreTime = time.Now()
+		targetRestoreTime = startTime
 	} else {
 		layout := "2006-01-02T15:04:05" // This is the reference layout for the input format
 
