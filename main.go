@@ -145,7 +145,7 @@ func parseFlags() error {
 
 	flagsSet := flag.NewFlagSet("app", flag.ExitOnError)
 
-	flagsSet.StringVar(&timestampInput, "timestamp", "", "Restore target timestamp in the format 'YYYY-MM-DDTHH:MM:SS' (required)")
+	flagsSet.StringVar(&timestampInput, "timestamp", "", "Restore target timestamp in the format 'YYYY-MM-DDTHH:MM:SS' (default: now)")
 	flagsSet.StringVar(&bucketName, "bucket", "", "The name of the S3 bucket to scan and restore (required)")
 	flagsSet.IntVar(&maxConcurrentScans, "maxConcurrentScans", 100, "Maximum number of concurrent folder scans")
 	flagsSet.StringVar(&reportNameInput, "reportName", "report.csv", "Name of the report file (default: report.csv)")
@@ -157,21 +157,25 @@ func parseFlags() error {
 		return err
 	}
 
-	if timestampInput == "" || bucketName == "" {
-		return fmt.Errorf("both timestamp and bucket flags are required")
+	if bucketName == "" {
+		return fmt.Errorf("bucket flags is required")
 	}
 
-	layout := "2006-01-02T15:04:05" // This is the reference layout for the input format
+	if timestampInput == "" {
+		// If not provided, use current time (good for inventory reports)
+		targetRestoreTime = time.Now()
+	} else {
+		layout := "2006-01-02T15:04:05" // This is the reference layout for the input format
 
-	targetRestoreTime, err = time.Parse(layout, timestampInput)
-	if err != nil {
-		return fmt.Errorf("error parsing provided timestamp: %v", err)
+		targetRestoreTime, err = time.Parse(layout, timestampInput)
+		if err != nil {
+			return fmt.Errorf("error parsing provided timestamp: %v", err)
+		}
 	}
 
 	if !strings.HasSuffix(strings.ToLower(reportNameInput), ".csv") {
 		reportNameInput += ".csv"
 	}
-
 	reportName = reportNameInput
 
 	// Append filter functions based on user input
