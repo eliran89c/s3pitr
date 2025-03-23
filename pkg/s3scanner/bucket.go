@@ -17,6 +17,7 @@ type BucketStatistics struct {
 
 type bucket struct {
 	name    string
+	root    string
 	folders chan *bucketFolder
 }
 
@@ -33,8 +34,8 @@ func (b *bucket) closeFolders() {
 	close(b.folders)
 }
 
-func (folder *bucketFolder) isRoot() bool {
-	return folder.prefix == "" && folder.delimiter == "/"
+func (b *bucket) isRoot(f *bucketFolder) bool {
+	return f.prefix == b.root && f.delimiter == "/"
 }
 
 func (stats *BucketStatistics) addPages(p int) {
@@ -51,11 +52,12 @@ func (stats *BucketStatistics) Cost() float32 {
 	return float32(stats.Pages) * listObjectPrice
 }
 
-func newBucket(name string) *bucket {
+func newBucket(name, prefix string) *bucket {
 	b := &bucket{
 		name:    name,
+		root:    prefix,
 		folders: make(chan *bucketFolder, 1),
 	}
-	b.folders <- &bucketFolder{delimiter: "/"} // manually add the root folder
+	b.folders <- &bucketFolder{delimiter: "/", prefix: prefix} // manually add the root folder
 	return b
 }

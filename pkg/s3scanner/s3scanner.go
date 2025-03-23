@@ -131,7 +131,7 @@ func (s *Scanner) fetchFolder(b *bucket, folder *bucketFolder, objCh chan<- *S3O
 
 // Scan performs a concurrent scan of the specified S3 bucket, processing each object using the provided function.
 // It returns a pointer to a BucketStatistics instance containing the number of pages and objects processed, and an error if any occurred.
-func (s *Scanner) Scan(bucketName string, fn func(o *S3Object) error) (*BucketStatistics, error) {
+func (s *Scanner) Scan(bucketName, prefix string, fn func(o *S3Object) error) (*BucketStatistics, error) {
 
 	// check if the bucket is versioned
 	res, err := s.client.GetBucketVersioning(s.ctx, &s3.GetBucketVersioningInput{
@@ -148,7 +148,7 @@ func (s *Scanner) Scan(bucketName string, fn func(o *S3Object) error) (*BucketSt
 
 	var wg sync.WaitGroup
 	stats := new(BucketStatistics)
-	b := newBucket(bucketName)
+	b := newBucket(bucketName, prefix)
 
 	for folder := range b.folders {
 		s.acquireWorker()
@@ -190,7 +190,7 @@ func (s *Scanner) Scan(bucketName string, fn func(o *S3Object) error) (*BucketSt
 			}
 
 			// close the prefix channel
-			if folder.isRoot() {
+			if b.isRoot(folder) {
 				b.closeFolders()
 			}
 
