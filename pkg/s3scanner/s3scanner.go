@@ -98,7 +98,7 @@ func (s *Scanner) fetchFolder(b *bucket, folder *bucketFolder, objCh chan<- *S3O
 					VersionId:      del.VersionId,
 					LastModified:   del.LastModified,
 					IsDeleteMarker: true,
-					IsLatest:       del.IsLatest,
+					IsLatest:       *del.IsLatest,
 				},
 			}
 		}
@@ -109,7 +109,7 @@ func (s *Scanner) fetchFolder(b *bucket, folder *bucketFolder, objCh chan<- *S3O
 				Metadata: S3ObjectMetadata{
 					VersionId:      ver.VersionId,
 					LastModified:   ver.LastModified,
-					IsLatest:       ver.IsLatest,
+					IsLatest:       *ver.IsLatest,
 					IsDeleteMarker: false,
 				},
 			}
@@ -119,7 +119,7 @@ func (s *Scanner) fetchFolder(b *bucket, folder *bucketFolder, objCh chan<- *S3O
 			b.addFolder(*commonPrefix.Prefix)
 		}
 
-		if !resp.IsTruncated {
+		if !*resp.IsTruncated {
 			break
 		}
 

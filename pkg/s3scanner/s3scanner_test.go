@@ -20,29 +20,31 @@ func (m *mockS3Client) ListObjectVersions(ctx context.Context, params *s3.ListOb
 		return nil, errors.New("mock error")
 	} else if *params.Prefix == "" {
 		return &s3.ListObjectVersionsOutput{
+			IsTruncated: aws.Bool(false),
 			Versions: []types.ObjectVersion{
 				{
 					Key:          aws.String("prefix-a/object"),
 					VersionId:    aws.String("v1"),
 					LastModified: aws.Time(time.Now()),
-					IsLatest:     true,
+					IsLatest:     aws.Bool(true),
 				},
 				{
 					Key:          aws.String("prefix-b/object"),
 					VersionId:    aws.String("v1"),
 					LastModified: aws.Time(time.Now()),
-					IsLatest:     false,
+					IsLatest:     aws.Bool(true),
 				},
 			},
 		}, nil
 	} else if *params.Prefix == "prefix-a/" {
 		return &s3.ListObjectVersionsOutput{
+			IsTruncated: aws.Bool(false),
 			Versions: []types.ObjectVersion{
 				{
 					Key:          aws.String("prefix-a/object"),
 					VersionId:    aws.String("v1"),
 					LastModified: aws.Time(time.Now()),
-					IsLatest:     true,
+					IsLatest:     aws.Bool(true),
 				},
 			},
 		}, nil
