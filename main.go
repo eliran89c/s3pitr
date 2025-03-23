@@ -11,8 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/eliran89c/s3pitr/internal/csvutils"
 	"github.com/eliran89c/s3pitr/pkg/s3scanner"
 
@@ -29,8 +32,12 @@ var (
 	targetRestoreTime  time.Time
 	bucketName         string
 	reportName         string
+	prefix             string
 	maxConcurrentScans int
 	reportFilters      []csvutils.ObjectFilterFunc
+	profile            string
+	region             string
+	roleArn            string
 )
 
 func main() {
@@ -39,7 +46,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// init writer
 	csvFile, err := os.Create(reportName)
 	if err != nil {
 		log.Fatal("Failed to create CSV file: ", err)
@@ -49,12 +55,11 @@ func main() {
 	writer := csv.NewWriter(csvFile)
 	defer writer.Flush()
 
-	// Create context and initialize S3 scanner
 	ctx := context.Background()
 
-	cfg, err := config.LoadDefaultConfig(ctx)
+	cfg, err := getClientConfig(ctx)
 	if err != nil {
-		log.Fatal("Failed to load AWS SDK configuration: ", err)
+		log.Fatal(err)
 	}
 
 	client := s3.NewFromConfig(cfg)
@@ -64,7 +69,6 @@ func main() {
 		log.Fatal("Failed to load s3scanner: ", err)
 	}
 
-	// Create and configure BadgerDB
 	opts := badger.DefaultOptions(localDBName)
 	opts.Logger = nil //disable badger logger
 	defer os.RemoveAll(localDBName)
@@ -75,13 +79,16 @@ func main() {
 	}
 	defer db.Close()
 
-	// Set spinner
 	spinner := spinner.New(spinner.CharSets[32], 100*time.Millisecond)
-	spinner.Prefix = fmt.Sprintf("Scanning bucket: %v ", bucketName)
+	if prefix == "" {
+		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v ", bucketName)
+	} else {
+		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefix: %v", bucketName, prefix)
+	}
 	spinner.Start()
 
 	// Scan S3 bucket and store objects in BadgerDB
-	scanResult, err := scanner.Scan(bucketName, func(obj *s3scanner.S3Object) error {
+	scanResult, err := scanner.Scan(bucketName, prefix, func(obj *s3scanner.S3Object) error {
 		dbObject := s3scanner.S3ObjectMetadata{}
 		keyBytes := []byte(*obj.Key)
 
@@ -116,7 +123,7 @@ func main() {
 		})
 
 		if err != nil {
-			return fmt.Errorf("Error handling key %s: %v\n", *obj.Key, err)
+			return fmt.Errorf("error handling key %s: %v", *obj.Key, err)
 		}
 
 		return nil
@@ -126,13 +133,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Create csv report
-	spinner.Prefix = fmt.Sprintf("Generating reports ")
+	spinner.Prefix = fmt.Sprintln("Generating reports")
 	if err = csvutils.GenerateReport(writer, db, bucketName, reportFilters...); err != nil {
 		log.Fatal("Error creating CSV report: ", err)
 	}
 
-	// stop spinner
 	spinner.Stop()
 
 	// Print scan results
@@ -155,10 +160,22 @@ func parseFlags() error {
 	flagsSet.StringVar(&reportNameInput, "reportName", "report.csv", "Name of the report file (default: report.csv)")
 	flagsSet.BoolVar(&includeLatest, "include-latest", false, "Include the latest versions of the objects in the report (default: false)")
 	flagsSet.BoolVar(&includeDeleteMarkers, "include-delete-markers", false, "Include delete markers in the report (default: false)")
+	flagsSet.StringVar(&prefix, "prefix", "", "Prefix to filter objects in the report (default: all objects)")
+	flagsSet.StringVar(&profile, "profile", "", "AWS profile to use for credentials")
+	flagsSet.StringVar(&region, "region", "", "AWS region to use")
+	flagsSet.StringVar(&roleArn, "role-arn", "", "AWS IAM role ARN to assume")
 
 	err := flagsSet.Parse(os.Args[1:])
 	if err != nil {
 		return err
+	}
+
+	if prefix != "" {
+		prefix = strings.TrimPrefix(prefix, "/")
+
+		if len(prefix) > 0 && !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
 	}
 
 	if bucketName == "" {
@@ -182,7 +199,6 @@ func parseFlags() error {
 	}
 	reportName = reportNameInput
 
-	// Append filter functions based on user input
 	if !includeLatest {
 		reportFilters = append(reportFilters, csvutils.SkipLatest)
 	}
@@ -191,4 +207,29 @@ func parseFlags() error {
 	}
 
 	return nil
+}
+
+func getClientConfig(ctx context.Context) (aws.Config, error) {
+	var options []func(*config.LoadOptions) error
+
+	if profile != "" {
+		options = append(options, config.WithSharedConfigProfile(profile))
+	}
+
+	if region != "" {
+		options = append(options, config.WithRegion(region))
+	}
+
+	cfg, err := config.LoadDefaultConfig(ctx, options...)
+	if err != nil {
+		return aws.Config{}, fmt.Errorf("failed to load AWS SDK configuration: %w", err)
+	}
+
+	if roleArn != "" {
+		stsClient := sts.NewFromConfig(cfg)
+		stsCreds := stscreds.NewAssumeRoleProvider(stsClient, roleArn)
+		cfg.Credentials = aws.NewCredentialsCache(stsCreds)
+	}
+
+	return cfg, nil
 }
