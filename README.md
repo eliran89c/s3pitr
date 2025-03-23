@@ -48,6 +48,10 @@ To use s3pitr, execute the binary with the required flags:
 * `-reportName`: The name of the report file (default: "report.csv").
 * `-include-latest`: By default, the latest versions of objects are excluded from the report. Set this flag to true to include the latest versions in the report. This is useful when you want to copy all the files to a new bucket.
 * `-include-delete-markers`: Controls whether or not to include objects with delete markers in the report. By default, objects with delete markers are excluded from the report, under the assumption that if a file was deleted before the target time, it's not needed for the restore operation. If you want to include delete markers in the report, set this flag to true.
+* `-prefix`: Prefix to filter objects in the report. by default `s3pitr` will scan the entire bucket.
+* `-profile`: The AWS profile to use for credentials.
+* `-region`: AWS region to use.
+* `-role-arn`: AWS IAM role ARN to assume.
 
 
 ## AWS S3 Batch Operations
