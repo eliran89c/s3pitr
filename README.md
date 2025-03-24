@@ -16,7 +16,7 @@ Before the creation of s3pitr, the following alternatives were examined:
 s3pitr overcomes these limitations by offering a straightforward, fast, and effective solution for generating PITR reports for S3 buckets, especially in situations where shorter RTOs are crucial.
 
 
-## Compiling and Usage
+## Installation and Usage
 
 ### Requirements
 Before using s3pitr, make sure you meet the following requirements:
