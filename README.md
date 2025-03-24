@@ -20,25 +20,41 @@ s3pitr overcomes these limitations by offering a straightforward, fast, and effe
 
 ### Requirements
 Before using s3pitr, make sure you meet the following requirements:
-1. **Go**: s3pitr was developed using Go 1.20. It might be compatible with older versions, but this has not been tested. To ensure a smooth experience, it's recommended to use Go 1.20 or later.
-2. **AWS Permissions:** To run s3pitr, your AWS account must have sufficient permissions. The following AWS Identity and Access Management (IAM) permissions are required:
+1. **AWS Permissions:** To run s3pitr, your AWS account must have sufficient permissions. The following AWS Identity and Access Management (IAM) permissions are required:
     * `s3:GetBucketVersioning`: This permission is necessary to retrieve the versioning status of the specified S3 bucket.
     * `s3:ListObjectVersions`: This permission is required to list the object versions in the specified S3 bucket.
 
-### Compiling
-To compile the project, navigate to the project directory and run:
+## Installation
 
-```bash
-go build -o s3pitr main.go
+You have several options to install s3pitr:
+
+### Option 1: macOS (Using Homebrew)
+
+If you're on macOS, you can use Homebrew to install s3pitr:
+
+```
+brew install eliran89c/tap/s3pitr
 ```
 
-This will create an executable file named s3pitr in your project directory.
+### Option 2: Pre-built Binaries (Linux and Windows)
+
+You can download pre-built binaries for Linux and Windows from the [releases page](https://github.com/eliran89c/s3pitr/releases) on GitHub. Choose the appropriate binary for your operating system and architecture.
+
+### Option 3: Using Go
+
+You can install s3pitr directly from GitHub using Go:
+
+```
+go install github.com/eliran89c/s3pitr@latest
+```
+
+This will download the source code, compile it, and install the `s3pitr` binary in your `$GOPATH/bin` directory. Make sure your `$GOPATH/bin` is in your system's PATH.
 
 ### Usage
 To use s3pitr, execute the binary with the required flags:
 
 ```bash
-./s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket
+s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket
 ```
 
 ### Flags
@@ -52,6 +68,7 @@ To use s3pitr, execute the binary with the required flags:
 * `-profile`: The AWS profile to use for credentials.
 * `-region`: AWS region to use.
 * `-role-arn`: AWS IAM role ARN to assume.
+* `-version`: Print s3pitr version.
 
 
 ## AWS S3 Batch Operations
