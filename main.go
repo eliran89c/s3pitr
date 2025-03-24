@@ -38,6 +38,9 @@ var (
 	profile            string
 	region             string
 	roleArn            string
+
+	version = "dev"
+	arch    = "dev"
 )
 
 func main() {
@@ -150,7 +153,7 @@ func main() {
 
 func parseFlags() error {
 	var timestampInput, reportNameInput string
-	var includeLatest, includeDeleteMarkers bool
+	var includeLatest, includeDeleteMarkers, printVer bool
 
 	flagsSet := flag.NewFlagSet("app", flag.ExitOnError)
 
@@ -164,10 +167,18 @@ func parseFlags() error {
 	flagsSet.StringVar(&profile, "profile", "", "AWS profile to use for credentials")
 	flagsSet.StringVar(&region, "region", "", "AWS region to use")
 	flagsSet.StringVar(&roleArn, "role-arn", "", "AWS IAM role ARN to assume")
+	flagsSet.BoolVar(&printVer, "version", false, "Print version information")
 
 	err := flagsSet.Parse(os.Args[1:])
 	if err != nil {
 		return err
+	}
+
+	if printVer {
+		fmt.Println("s3pitr")
+		fmt.Println("Version:", version)
+		fmt.Println("Architecture:", arch)
+		os.Exit(0)
 	}
 
 	if prefix != "" {
