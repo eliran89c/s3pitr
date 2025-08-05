@@ -122,6 +122,13 @@ func main() {
 				return txn.Set(keyBytes, obj.Metadata.Serialize())
 			}
 
+			if obj.Metadata.LastModified.Equal(*dbObject.LastModified) && obj.Metadata.IsLatest {
+				// If the last modified time is equal and the current object is marked as latest,
+				// we update the existing object to be the latest version.
+				//TODO: handle the case where both objects have the same last modified time but non is marked as latest
+				return txn.Set(keyBytes, obj.Metadata.Serialize())
+			}
+
 			return nil
 		})
 
