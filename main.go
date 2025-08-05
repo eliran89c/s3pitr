@@ -125,8 +125,15 @@ func main() {
 			if obj.Metadata.LastModified.Equal(*dbObject.LastModified) && obj.Metadata.IsLatest {
 				// If the last modified time is equal and the current object is marked as latest,
 				// we update the existing object to be the latest version.
-				//TODO: handle the case where both objects have the same last modified time but non is marked as latest
 				return txn.Set(keyBytes, obj.Metadata.Serialize())
+			}
+
+			if obj.Metadata.LastModified.Equal(*dbObject.LastModified) && !obj.Metadata.IsLatest && !dbObject.IsLatest {
+				// If both objects have the same last modified time and neither is marked as latest,
+				// use VersionId lexicographic comparison as a consistent tiebreaker.
+				if *obj.Metadata.VersionId > *dbObject.VersionId {
+					return txn.Set(keyBytes, obj.Metadata.Serialize())
+				}
 			}
 
 			return nil
