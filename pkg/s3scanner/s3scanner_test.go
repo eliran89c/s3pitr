@@ -118,16 +118,16 @@ func TestVersionIdTiebreaker(t *testing.T) {
 
 	// Test case: obj1 has lexicographically larger VersionId, should be chosen
 	testCases := []struct {
-		name            string
-		obj1VersionId   string
-		obj2VersionId   string
-		expectedChosen  string
-		description     string
+		name           string
+		obj1VersionId  string
+		obj2VersionId  string
+		expectedChosen string
+		description    string
 	}{
 		{
 			name:           "obj1_larger_version",
 			obj1VersionId:  "version_b",
-			obj2VersionId:  "version_a", 
+			obj2VersionId:  "version_a",
 			expectedChosen: "version_b",
 			description:    "Object with lexicographically larger VersionId should be chosen",
 		},
@@ -135,7 +135,7 @@ func TestVersionIdTiebreaker(t *testing.T) {
 			name:           "obj2_larger_version",
 			obj1VersionId:  "version_a",
 			obj2VersionId:  "version_z",
-			expectedChosen: "version_z", 
+			expectedChosen: "version_z",
 			description:    "Object with lexicographically larger VersionId should be chosen",
 		},
 		{
@@ -169,8 +169,8 @@ func TestVersionIdTiebreaker(t *testing.T) {
 
 			// Simulate the tiebreaker logic from main.go
 			var chosenVersion string
-			if obj1.Metadata.LastModified.Equal(*obj2.Metadata.LastModified) && 
-			   !obj1.Metadata.IsLatest && !obj2.Metadata.IsLatest {
+			if obj1.Metadata.LastModified.Equal(*obj2.Metadata.LastModified) &&
+				!obj1.Metadata.IsLatest && !obj2.Metadata.IsLatest {
 				if *obj1.Metadata.VersionId > *obj2.Metadata.VersionId {
 					chosenVersion = *obj1.Metadata.VersionId
 				} else {
@@ -179,7 +179,7 @@ func TestVersionIdTiebreaker(t *testing.T) {
 			}
 
 			if chosenVersion != tc.expectedChosen {
-				t.Errorf("%s: expected %s to be chosen, but got %s", 
+				t.Errorf("%s: expected %s to be chosen, but got %s",
 					tc.description, tc.expectedChosen, chosenVersion)
 			}
 		})
@@ -193,40 +193,40 @@ func TestSameDateCurrentIsLatest(t *testing.T) {
 	baseTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	testCases := []struct {
-		name             string
-		currentVersionId string
+		name              string
+		currentVersionId  string
 		existingVersionId string
-		currentIsLatest  bool
-		existingIsLatest bool
-		expectedChosen   string
-		description      string
+		currentIsLatest   bool
+		existingIsLatest  bool
+		expectedChosen    string
+		description       string
 	}{
 		{
-			name:             "current_is_latest",
-			currentVersionId: "version_new",
+			name:              "current_is_latest",
+			currentVersionId:  "version_new",
 			existingVersionId: "version_old",
-			currentIsLatest:  true,
-			existingIsLatest: false,
-			expectedChosen:   "version_new",
-			description:      "When current object is marked as latest, it should be chosen",
+			currentIsLatest:   true,
+			existingIsLatest:  false,
+			expectedChosen:    "version_new",
+			description:       "When current object is marked as latest, it should be chosen",
 		},
 		{
-			name:             "existing_is_latest",
-			currentVersionId: "version_new", 
+			name:              "existing_is_latest",
+			currentVersionId:  "version_new",
 			existingVersionId: "version_old",
-			currentIsLatest:  false,
-			existingIsLatest: true,
-			expectedChosen:   "version_old",
-			description:      "When existing object is marked as latest, it should be kept",
+			currentIsLatest:   false,
+			existingIsLatest:  true,
+			expectedChosen:    "version_old",
+			description:       "When existing object is marked as latest, it should be kept",
 		},
 		{
-			name:             "both_latest",
-			currentVersionId: "version_new",
-			existingVersionId: "version_old", 
-			currentIsLatest:  true,
-			existingIsLatest: true,
-			expectedChosen:   "version_new",
-			description:      "When both are latest, current should win (edge case)",
+			name:              "both_latest",
+			currentVersionId:  "version_new",
+			existingVersionId: "version_old",
+			currentIsLatest:   true,
+			existingIsLatest:  true,
+			expectedChosen:    "version_new",
+			description:       "When both are latest, current should win (edge case)",
 		},
 	}
 
@@ -249,15 +249,15 @@ func TestSameDateCurrentIsLatest(t *testing.T) {
 
 			// Simulate the decision logic from main.go
 			var chosenVersion string
-			
+
 			// Check if newer version (this shouldn't trigger for same time)
 			if currentObj.Metadata.LastModified.After(*existingObj.LastModified) {
 				chosenVersion = *currentObj.Metadata.VersionId
 			} else if currentObj.Metadata.LastModified.Equal(*existingObj.LastModified) && currentObj.Metadata.IsLatest {
 				// Current is latest case
 				chosenVersion = *currentObj.Metadata.VersionId
-			} else if currentObj.Metadata.LastModified.Equal(*existingObj.LastModified) && 
-					  !currentObj.Metadata.IsLatest && !existingObj.IsLatest {
+			} else if currentObj.Metadata.LastModified.Equal(*existingObj.LastModified) &&
+				!currentObj.Metadata.IsLatest && !existingObj.IsLatest {
 				// Neither is latest, use VersionId tiebreaker
 				if *currentObj.Metadata.VersionId > *existingObj.VersionId {
 					chosenVersion = *currentObj.Metadata.VersionId
@@ -270,7 +270,7 @@ func TestSameDateCurrentIsLatest(t *testing.T) {
 			}
 
 			if chosenVersion != tc.expectedChosen {
-				t.Errorf("%s: expected %s to be chosen, but got %s", 
+				t.Errorf("%s: expected %s to be chosen, but got %s",
 					tc.description, tc.expectedChosen, chosenVersion)
 			}
 		})
