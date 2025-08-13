@@ -49,7 +49,11 @@ func (m *mockS3Client) ListObjectVersions(ctx context.Context, params *s3.ListOb
 			},
 		}, nil
 	}
-	return nil, nil
+	// Return empty result for unrecognized prefixes instead of nil
+	return &s3.ListObjectVersionsOutput{
+		IsTruncated: aws.Bool(false),
+		Versions:    []types.ObjectVersion{},
+	}, nil
 }
 
 func (m *mockS3Client) GetBucketVersioning(ctx context.Context, params *s3.GetBucketVersioningInput, optFns ...func(*s3.Options)) (*s3.GetBucketVersioningOutput, error) {
@@ -81,25 +85,25 @@ func TestScan(t *testing.T) {
 	}
 
 	// Test successful scan
-	stats, err := scanner.Scan("test-bucket", "", fn)
+	stats, err := scanner.Scan("test-bucket", []string{""}, []string{}, fn)
 	if err != nil || stats == nil || stats.Objects != 2 {
 		t.Errorf("Scan failed: expected no error and 2 objects, got error %v and stats %v", err, stats)
 	}
 
 	// Test non-versioned bucket
-	stats, err = scanner.Scan("non-versioned-bucket", "", fn)
+	stats, err = scanner.Scan("non-versioned-bucket", []string{""}, []string{}, fn)
 	if err == nil || stats != nil {
 		t.Errorf("Scan failed: expected an error and nil stats, got error %v and stats %v", err, stats)
 	}
 
 	// Test prefixed bucket
-	stats, err = scanner.Scan("test-bucket", "prefix-a/", fn)
+	stats, err = scanner.Scan("test-bucket", []string{"prefix-a/"}, []string{}, fn)
 	if err != nil || stats == nil || stats.Objects != 1 {
 		t.Errorf("Scan failed: expected no error and 1 objects, got error %v and stats %v", err, stats)
 	}
 
 	// Test with error while scanning
-	stats, err = scanner.Scan("test-bucket", "", func(o *S3Object) error {
+	stats, err = scanner.Scan("test-bucket", []string{""}, []string{}, func(o *S3Object) error {
 		if *o.Key == "error" {
 			return errors.New("mock error")
 		}
@@ -107,6 +111,34 @@ func TestScan(t *testing.T) {
 	})
 	if err != nil || stats == nil {
 		t.Errorf("Scan failed: expected no error and stats, got error %v and stats %v", err, stats)
+	}
+}
+
+func TestMultiplePrefixScan(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(mockS3Client)
+	scanner, _ := NewScanner(mockClient, ctx, 2)
+
+	fn := func(o *S3Object) error {
+		return nil
+	}
+
+	// Test scanning with multiple prefixes
+	stats, err := scanner.Scan("test-bucket", []string{"prefix-a/", "prefix-b/"}, []string{}, fn)
+	if err != nil {
+		t.Errorf("Multiple prefix scan failed: expected no error, got %v", err)
+	}
+
+	// Note: With the current mock, prefix-b/ doesn't return objects,
+	// so we should only get objects from prefix-a/ (which returns 1 object)
+	if stats == nil || stats.Objects != 1 {
+		t.Errorf("Multiple prefix scan failed: expected 1 object, got stats %v", stats)
+	}
+
+	// Test scanning with no prefixes (empty slice should default to root scan)
+	stats, err = scanner.Scan("test-bucket", []string{}, []string{}, fn)
+	if err != nil || stats == nil || stats.Objects != 2 {
+		t.Errorf("Empty prefix scan failed: expected no error and 2 objects, got error %v and stats %v", err, stats)
 	}
 }
 

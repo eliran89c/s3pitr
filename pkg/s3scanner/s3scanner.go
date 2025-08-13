@@ -131,7 +131,7 @@ func (s *Scanner) fetchFolder(b *bucket, folder *bucketFolder, objCh chan<- *S3O
 
 // Scan performs a concurrent scan of the specified S3 bucket, processing each object using the provided function.
 // It returns a pointer to a BucketStatistics instance containing the number of pages and objects processed, and an error if any occurred.
-func (s *Scanner) Scan(bucketName, prefix string, fn func(o *S3Object) error) (*BucketStatistics, error) {
+func (s *Scanner) Scan(bucketName string, prefixes []string, excludePaths []string, fn func(o *S3Object) error) (*BucketStatistics, error) {
 
 	// check if the bucket is versioned
 	res, err := s.client.GetBucketVersioning(s.ctx, &s3.GetBucketVersioningInput{
@@ -148,53 +148,68 @@ func (s *Scanner) Scan(bucketName, prefix string, fn func(o *S3Object) error) (*
 
 	var wg sync.WaitGroup
 	stats := new(BucketStatistics)
-	b := newBucket(bucketName, prefix)
 
-	for folder := range b.folders {
-		s.acquireWorker()
-		wg.Add(1)
+	// If no prefixes provided, scan the entire bucket
+	if len(prefixes) == 0 {
+		prefixes = []string{""}
+	}
 
-		go func(folder *bucketFolder) {
-			defer s.releaseWorker()
+	exclusionMatcher := NewExclusionMatcher(excludePaths, prefixes)
 
-			objCh := make(chan *S3Object)
-			defer close(objCh)
+	// Create a bucket worker for each prefix
+	buckets := make([]*bucket, len(prefixes))
+	for i, prefix := range prefixes {
+		buckets[i] = newBucketWithExclusions(bucketName, prefix, exclusionMatcher)
+	}
 
-			// process objects
-			go func(objCh <-chan *S3Object) {
-				defer wg.Done()
+	// Process each bucket (prefix) concurrently
+	for _, b := range buckets {
+		for folder := range b.folders {
+			s.acquireWorker()
+			wg.Add(1)
 
-				// panic recovery
-				defer func() {
-					if r := recover(); r != nil {
-						s.logger.Println("Object processing function panicked:", r)
+			go func(b *bucket, folder *bucketFolder) {
+				defer s.releaseWorker()
+
+				objCh := make(chan *S3Object)
+				defer close(objCh)
+
+				// process objects
+				go func(objCh <-chan *S3Object) {
+					defer wg.Done()
+
+					// panic recovery
+					defer func() {
+						if r := recover(); r != nil {
+							s.logger.Println("Object processing function panicked:", r)
+						}
+					}()
+
+					i := 0
+					for obj := range objCh {
+						i++
+						if err := fn(obj); err != nil {
+							s.logger.Println("Error in object processing function:", err)
+						}
 					}
-				}()
+					stats.addObjects(i)
 
-				i := 0
-				for obj := range objCh {
-					i++
-					if err := fn(obj); err != nil {
-						s.logger.Println("Error in object processing function:", err)
-					}
+				}(objCh)
+
+				pages, err := s.fetchFolder(b, folder, objCh)
+				stats.addPages(pages)
+
+				if err != nil {
+					s.logger.Printf("Failed to fetch prefix '%s': %v\n", folder.prefix, err)
 				}
-				stats.addObjects(i)
 
-			}(objCh)
+				// close the prefix channel
+				if b.isRoot(folder) {
+					b.closeFolders()
+				}
 
-			pages, err := s.fetchFolder(b, folder, objCh)
-			stats.addPages(pages)
-
-			if err != nil {
-				s.logger.Printf("Failed to fetch prefix '%s': %v\n", folder.prefix, err)
-			}
-
-			// close the prefix channel
-			if b.isRoot(folder) {
-				b.closeFolders()
-			}
-
-		}(folder)
+			}(b, folder)
+		}
 	}
 
 	// Wait for all the worker goroutines to finish processing prefixes
