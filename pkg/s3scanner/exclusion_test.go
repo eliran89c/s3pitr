@@ -51,11 +51,34 @@ func TestNewExclusionMatcher(t *testing.T) {
 				objectExclusions: []string{"a/b/c/data/cache/temp/"},
 			},
 		},
+		{
+			name:         "bucket_level_exclusion",
+			excludePaths: []string{"prefix-a/", "prefix-b/logs/"},
+			rootPrefixes: []string{"prefix-a/", "prefix-b/"},
+			expected: &ExclusionMatcher{
+				bucketExclusions: []string{"prefix-a/"},
+				rootExclusions:   []string{"prefix-b/logs/"},
+			},
+		},
+		{
+			name:         "mixed_with_bucket_exclusions",
+			excludePaths: []string{"prefix-a/", "prefix-b/logs/", "prefix-b/data/cache/temp/"},
+			rootPrefixes: []string{"prefix-a/", "prefix-b/"},
+			expected: &ExclusionMatcher{
+				bucketExclusions: []string{"prefix-a/"},
+				rootExclusions:   []string{"prefix-b/logs/"},
+				objectExclusions: []string{"prefix-b/data/cache/temp/"},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := NewExclusionMatcher(tc.excludePaths, tc.rootPrefixes)
+
+			if len(result.bucketExclusions) != len(tc.expected.bucketExclusions) {
+				t.Errorf("Expected %d bucket exclusions, got %d", len(tc.expected.bucketExclusions), len(result.bucketExclusions))
+			}
 
 			if len(result.rootExclusions) != len(tc.expected.rootExclusions) {
 				t.Errorf("Expected %d root exclusions, got %d", len(tc.expected.rootExclusions), len(result.rootExclusions))
@@ -63,6 +86,12 @@ func TestNewExclusionMatcher(t *testing.T) {
 
 			if len(result.objectExclusions) != len(tc.expected.objectExclusions) {
 				t.Errorf("Expected %d object exclusions, got %d", len(tc.expected.objectExclusions), len(result.objectExclusions))
+			}
+
+			for i, expected := range tc.expected.bucketExclusions {
+				if i >= len(result.bucketExclusions) || result.bucketExclusions[i] != expected {
+					t.Errorf("Expected bucket exclusion %s, got %s", expected, result.bucketExclusions[i])
+				}
 			}
 
 			for i, expected := range tc.expected.rootExclusions {
@@ -192,6 +221,111 @@ func TestShouldSkipRootFolder(t *testing.T) {
 			result := matcher.ShouldSkipRootFolder(tc.folderPrefix)
 			if result != tc.expected {
 				t.Errorf("Expected %t, got %t for folderPrefix=%s", tc.expected, result, tc.folderPrefix)
+			}
+		})
+	}
+}
+
+func TestIsBucketLevelExclusion(t *testing.T) {
+	testCases := []struct {
+		name         string
+		exclude      string
+		rootPrefixes []string
+		expected     bool
+	}{
+		{
+			name:         "exclude_matches_root_prefix",
+			exclude:      "prefix-a/",
+			rootPrefixes: []string{"prefix-a/", "prefix-b/"},
+			expected:     true,
+		},
+		{
+			name:         "exclude_not_in_root_prefixes",
+			exclude:      "prefix-c/",
+			rootPrefixes: []string{"prefix-a/", "prefix-b/"},
+			expected:     false,
+		},
+		{
+			name:         "empty_root_prefixes",
+			exclude:      "prefix-a/",
+			rootPrefixes: []string{},
+			expected:     false,
+		},
+		{
+			name:         "single_root_prefix_match",
+			exclude:      "data/",
+			rootPrefixes: []string{"data/"},
+			expected:     true,
+		},
+		{
+			name:         "exact_match_required",
+			exclude:      "prefix-a/logs/",
+			rootPrefixes: []string{"prefix-a/"},
+			expected:     false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := isBucketLevelExclusion(tc.exclude, tc.rootPrefixes)
+			if result != tc.expected {
+				t.Errorf("Expected %t, got %t for exclude=%s, rootPrefixes=%v", tc.expected, result, tc.exclude, tc.rootPrefixes)
+			}
+		})
+	}
+}
+
+func TestShouldSkipBucket(t *testing.T) {
+	testCases := []struct {
+		name         string
+		excludePaths []string
+		rootPrefixes []string
+		bucketName   string
+		expected     bool
+	}{
+		{
+			name:         "skip_excluded_bucket",
+			excludePaths: []string{"prefix-a/", "logs/"},
+			rootPrefixes: []string{"prefix-a/", "prefix-b/"},
+			bucketName:   "prefix-a/",
+			expected:     true,
+		},
+		{
+			name:         "dont_skip_allowed_bucket",
+			excludePaths: []string{"prefix-a/"},
+			rootPrefixes: []string{"prefix-a/", "prefix-b/"},
+			bucketName:   "prefix-b/",
+			expected:     false,
+		},
+		{
+			name:         "no_bucket_exclusions",
+			excludePaths: []string{"logs/"},
+			rootPrefixes: []string{""},
+			bucketName:   "any-bucket",
+			expected:     false,
+		},
+		{
+			name:         "empty_exclusions",
+			excludePaths: []string{},
+			rootPrefixes: []string{"prefix-a/"},
+			bucketName:   "prefix-a/",
+			expected:     false,
+		},
+		{
+			name:         "multiple_bucket_exclusions",
+			excludePaths: []string{"prefix-a/", "prefix-c/", "logs/"},
+			rootPrefixes: []string{"prefix-a/", "prefix-b/", "prefix-c/"},
+			bucketName:   "prefix-c/",
+			expected:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			matcher := NewExclusionMatcher(tc.excludePaths, tc.rootPrefixes)
+			result := matcher.ShouldSkipBucket(tc.bucketName)
+			if result != tc.expected {
+				t.Errorf("Expected %t, got %t for bucketName=%s", tc.expected, result, tc.bucketName)
 			}
 		})
 	}

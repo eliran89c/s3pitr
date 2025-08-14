@@ -1,10 +1,12 @@
 package s3scanner
 
 import (
+	"slices"
 	"strings"
 )
 
 type ExclusionMatcher struct {
+	bucketExclusions []string
 	rootExclusions   []string
 	objectExclusions []string
 }
@@ -23,10 +25,16 @@ func (e *ExclusionMatcher) classifyExclusions(excludePaths []string, rootPrefixe
 	for _, exclude := range excludePaths {
 		if isRootLevelExclusion(exclude, rootPrefixes) {
 			e.rootExclusions = append(e.rootExclusions, exclude)
+		} else if isBucketLevelExclusion(exclude, rootPrefixes) {
+			e.bucketExclusions = append(e.bucketExclusions, exclude)
 		} else {
 			e.objectExclusions = append(e.objectExclusions, exclude)
 		}
 	}
+}
+
+func (e *ExclusionMatcher) ShouldSkipBucket(bucketName string) bool {
+	return slices.Contains(e.bucketExclusions, bucketName)
 }
 
 func (e *ExclusionMatcher) ShouldSkipRootFolder(folderPrefix string) bool {
@@ -47,6 +55,10 @@ func (e *ExclusionMatcher) ShouldSkipObject(objectKey string) bool {
 	return false
 }
 
+func isBucketLevelExclusion(exclude string, rootPrefixes []string) bool {
+	return slices.Contains(rootPrefixes, exclude)
+}
+
 func isRootLevelExclusion(exclude string, rootPrefixes []string) bool {
 	// If no prefixes, check if exclude is a root-level folder
 	if len(rootPrefixes) == 0 {
@@ -65,8 +77,6 @@ func isRootLevelExclusion(exclude string, rootPrefixes []string) bool {
 			if strings.HasPrefix(exclude, rootPrefix) {
 				// Get the path after the root prefix
 				remainingPath := strings.TrimPrefix(exclude, rootPrefix)
-
-				// Root level exclusion: exactly one more folder level
 				if strings.Count(remainingPath, "/") == 1 {
 					return true
 				}

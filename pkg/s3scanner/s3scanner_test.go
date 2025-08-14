@@ -148,6 +148,75 @@ func TestMultiplePrefixScan(t *testing.T) {
 	}
 }
 
+func TestScanWithBucketExclusion(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(mockS3Client)
+	scanner, _ := NewScanner(mockClient, ctx, 2)
+
+	fn := func(o *S3Object) error {
+		return nil
+	}
+
+	// Test scanning with bucket-level exclusions
+	exclusionMatcher := NewExclusionMatcher([]string{"prefix-a/"}, []string{"prefix-a/", "prefix-b/"})
+	stats, err := scanner.Scan("test-bucket", []string{"prefix-a/", "prefix-b/"}, exclusionMatcher, fn)
+	if err != nil {
+		t.Errorf("Bucket exclusion scan failed: expected no error, got %v", err)
+	}
+
+	// Should only scan prefix-b/ since prefix-a/ is excluded
+	// With current mock, prefix-b/ returns no objects
+	if stats == nil || stats.Objects != 0 {
+		t.Errorf("Bucket exclusion scan failed: expected 0 objects, got stats %v", stats)
+	}
+
+	// Test scanning with no bucket exclusions
+	exclusionMatcher = NewExclusionMatcher([]string{"logs/"}, []string{"prefix-a/", "prefix-b/"})
+	stats, err = scanner.Scan("test-bucket", []string{"prefix-a/", "prefix-b/"}, exclusionMatcher, fn)
+	if err != nil {
+		t.Errorf("No bucket exclusion scan failed: expected no error, got %v", err)
+	}
+
+	// Should scan both prefixes, but only prefix-a/ returns objects
+	if stats == nil || stats.Objects != 1 {
+		t.Errorf("No bucket exclusion scan failed: expected 1 object, got stats %v", stats)
+	}
+
+	// Test scanning with all prefixes excluded
+	exclusionMatcher = NewExclusionMatcher([]string{"prefix-a/", "prefix-b/"}, []string{"prefix-a/", "prefix-b/"})
+	stats, err = scanner.Scan("test-bucket", []string{"prefix-a/", "prefix-b/"}, exclusionMatcher, fn)
+	if err != nil {
+		t.Errorf("All prefixes excluded scan failed: expected no error, got %v", err)
+	}
+
+	// Should scan no buckets
+	if stats == nil || stats.Objects != 0 {
+		t.Errorf("All prefixes excluded scan failed: expected 0 objects, got stats %v", stats)
+	}
+}
+
+func TestSlashPrefixHandling(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(mockS3Client)
+	scanner, _ := NewScanner(mockClient, ctx, 2)
+
+	fn := func(o *S3Object) error {
+		return nil
+	}
+
+	// Test scanning with "/" prefix (should be treated as empty prefix)
+	exclusionMatcher := NewExclusionMatcher([]string{}, []string{})
+	stats, err := scanner.Scan("test-bucket", []string{"/"}, exclusionMatcher, fn)
+	if err != nil {
+		t.Errorf("Slash prefix scan failed: expected no error, got %v", err)
+	}
+
+	// Should scan entire bucket (empty prefix behavior)
+	if stats == nil || stats.Objects != 2 {
+		t.Errorf("Slash prefix scan failed: expected 2 objects, got stats %v", stats)
+	}
+}
+
 func TestVersionIdTiebreaker(t *testing.T) {
 	// Test the VersionId tiebreaker logic for objects with same LastModified time
 	// and neither marked as IsLatest

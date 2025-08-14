@@ -3,7 +3,7 @@ package s3scanner
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"sync"
 
@@ -69,7 +69,7 @@ func NewScanner(s3Client S3ClientAPI, ctx context.Context, maxConcurrentScans in
 		ctx:        ctx,
 		client:     s3Client,
 		workerPool: workerPool,
-		logger:     log.New(ioutil.Discard, "", 0),
+		logger:     log.New(io.Discard, "", 0),
 	}, nil
 }
 
@@ -154,10 +154,17 @@ func (s *Scanner) Scan(bucketName string, prefixes []string, exclusionMatcher *E
 		prefixes = []string{""}
 	}
 
+	// If prefix is ["/"], treat it as no prefix (scan entire bucket)
+	if len(prefixes) == 1 && prefixes[0] == "/" {
+		prefixes = []string{""}
+	}
+
 	// Create a bucket worker for each prefix
-	buckets := make([]*bucket, len(prefixes))
-	for i, prefix := range prefixes {
-		buckets[i] = newBucket(bucketName, prefix, exclusionMatcher)
+	buckets := make([]*bucket, 0)
+	for _, prefix := range prefixes {
+		if !exclusionMatcher.ShouldSkipBucket(prefix) {
+			buckets = append(buckets, newBucket(bucketName, prefix, exclusionMatcher))
+		}
 	}
 
 	// Process each bucket (prefix) concurrently
