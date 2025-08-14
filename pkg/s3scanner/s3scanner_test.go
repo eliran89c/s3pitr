@@ -189,7 +189,7 @@ func TestScanWithBucketExclusion(t *testing.T) {
 		t.Errorf("All prefixes excluded scan failed: expected no error, got %v", err)
 	}
 
-	// Should scan no buckets
+	// Should scan no prefixes
 	if stats == nil || stats.Objects != 0 {
 		t.Errorf("All prefixes excluded scan failed: expected 0 objects, got stats %v", stats)
 	}
