@@ -21,13 +21,6 @@ func NewExclusionMatcher(excludePaths []string, rootPrefixes []string) *Exclusio
 
 func (e *ExclusionMatcher) classifyExclusions(excludePaths []string, rootPrefixes []string) {
 	for _, exclude := range excludePaths {
-		exclude = strings.TrimSpace(exclude)
-		if exclude == "" {
-			continue
-		}
-
-		exclude = normalizePrefix(exclude)
-
 		if isRootLevelExclusion(exclude, rootPrefixes) {
 			e.rootExclusions = append(e.rootExclusions, exclude)
 		} else {
@@ -52,14 +45,6 @@ func (e *ExclusionMatcher) ShouldSkipObject(objectKey string) bool {
 		}
 	}
 	return false
-}
-
-func normalizePrefix(prefix string) string {
-	prefix = strings.TrimPrefix(prefix, "/")
-	if len(prefix) > 0 && !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-	return prefix
 }
 
 func isRootLevelExclusion(exclude string, rootPrefixes []string) bool {

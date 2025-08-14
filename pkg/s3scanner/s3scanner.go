@@ -131,7 +131,7 @@ func (s *Scanner) fetchFolder(b *bucket, folder *bucketFolder, objCh chan<- *S3O
 
 // Scan performs a concurrent scan of the specified S3 bucket, processing each object using the provided function.
 // It returns a pointer to a BucketStatistics instance containing the number of pages and objects processed, and an error if any occurred.
-func (s *Scanner) Scan(bucketName string, prefixes []string, excludePaths []string, fn func(o *S3Object) error) (*BucketStatistics, error) {
+func (s *Scanner) Scan(bucketName string, prefixes []string, exclusionMatcher *ExclusionMatcher, fn func(o *S3Object) error) (*BucketStatistics, error) {
 
 	// check if the bucket is versioned
 	res, err := s.client.GetBucketVersioning(s.ctx, &s3.GetBucketVersioningInput{
@@ -154,12 +154,10 @@ func (s *Scanner) Scan(bucketName string, prefixes []string, excludePaths []stri
 		prefixes = []string{""}
 	}
 
-	exclusionMatcher := NewExclusionMatcher(excludePaths, prefixes)
-
 	// Create a bucket worker for each prefix
 	buckets := make([]*bucket, len(prefixes))
 	for i, prefix := range prefixes {
-		buckets[i] = newBucketWithExclusions(bucketName, prefix, exclusionMatcher)
+		buckets[i] = newBucket(bucketName, prefix, exclusionMatcher)
 	}
 
 	// Process each bucket (prefix) concurrently

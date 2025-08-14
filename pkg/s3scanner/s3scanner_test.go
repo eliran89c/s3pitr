@@ -85,25 +85,29 @@ func TestScan(t *testing.T) {
 	}
 
 	// Test successful scan
-	stats, err := scanner.Scan("test-bucket", []string{""}, []string{}, fn)
+	exclusionMatcher := NewExclusionMatcher([]string{}, []string{""})
+	stats, err := scanner.Scan("test-bucket", []string{""}, exclusionMatcher, fn)
 	if err != nil || stats == nil || stats.Objects != 2 {
 		t.Errorf("Scan failed: expected no error and 2 objects, got error %v and stats %v", err, stats)
 	}
 
 	// Test non-versioned bucket
-	stats, err = scanner.Scan("non-versioned-bucket", []string{""}, []string{}, fn)
+	exclusionMatcher = NewExclusionMatcher([]string{}, []string{""})
+	stats, err = scanner.Scan("non-versioned-bucket", []string{""}, exclusionMatcher, fn)
 	if err == nil || stats != nil {
 		t.Errorf("Scan failed: expected an error and nil stats, got error %v and stats %v", err, stats)
 	}
 
 	// Test prefixed bucket
-	stats, err = scanner.Scan("test-bucket", []string{"prefix-a/"}, []string{}, fn)
+	exclusionMatcher = NewExclusionMatcher([]string{}, []string{"prefix-a/"})
+	stats, err = scanner.Scan("test-bucket", []string{"prefix-a/"}, exclusionMatcher, fn)
 	if err != nil || stats == nil || stats.Objects != 1 {
 		t.Errorf("Scan failed: expected no error and 1 objects, got error %v and stats %v", err, stats)
 	}
 
 	// Test with error while scanning
-	stats, err = scanner.Scan("test-bucket", []string{""}, []string{}, func(o *S3Object) error {
+	exclusionMatcher = NewExclusionMatcher([]string{}, []string{""})
+	stats, err = scanner.Scan("test-bucket", []string{""}, exclusionMatcher, func(o *S3Object) error {
 		if *o.Key == "error" {
 			return errors.New("mock error")
 		}
@@ -124,7 +128,8 @@ func TestMultiplePrefixScan(t *testing.T) {
 	}
 
 	// Test scanning with multiple prefixes
-	stats, err := scanner.Scan("test-bucket", []string{"prefix-a/", "prefix-b/"}, []string{}, fn)
+	exclusionMatcher := NewExclusionMatcher([]string{}, []string{"prefix-a/", "prefix-b/"})
+	stats, err := scanner.Scan("test-bucket", []string{"prefix-a/", "prefix-b/"}, exclusionMatcher, fn)
 	if err != nil {
 		t.Errorf("Multiple prefix scan failed: expected no error, got %v", err)
 	}
@@ -136,7 +141,8 @@ func TestMultiplePrefixScan(t *testing.T) {
 	}
 
 	// Test scanning with no prefixes (empty slice should default to root scan)
-	stats, err = scanner.Scan("test-bucket", []string{}, []string{}, fn)
+	exclusionMatcher = NewExclusionMatcher([]string{}, []string{})
+	stats, err = scanner.Scan("test-bucket", []string{}, exclusionMatcher, fn)
 	if err != nil || stats == nil || stats.Objects != 2 {
 		t.Errorf("Empty prefix scan failed: expected no error and 2 objects, got error %v and stats %v", err, stats)
 	}

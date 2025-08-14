@@ -56,17 +56,7 @@ func (stats *BucketStatistics) Cost() float32 {
 	return float32(stats.Pages) * listObjectPrice
 }
 
-func newBucket(name, prefix string) *bucket {
-	b := &bucket{
-		name:    name,
-		root:    prefix,
-		folders: make(chan *bucketFolder, 1),
-	}
-	b.folders <- &bucketFolder{delimiter: "/", prefix: prefix} // manually add the root folder
-	return b
-}
-
-func newBucketWithExclusions(name, prefix string, exclusionMatcher *ExclusionMatcher) *bucket {
+func newBucket(name, prefix string, exclusionMatcher *ExclusionMatcher) *bucket {
 	b := &bucket{
 		name:             name,
 		root:             prefix,

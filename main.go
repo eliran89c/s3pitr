@@ -95,7 +95,7 @@ func main() {
 	exclusionMatcher := s3scanner.NewExclusionMatcher(excludePaths, prefixes)
 
 	// Scan S3 bucket and store objects in BadgerDB
-	scanResult, err := scanner.Scan(bucketName, prefixes, excludePaths, func(obj *s3scanner.S3Object) error {
+	scanResult, err := scanner.Scan(bucketName, prefixes, exclusionMatcher, func(obj *s3scanner.S3Object) error {
 		dbObject := s3scanner.S3ObjectMetadata{}
 		keyBytes := []byte(*obj.Key)
 
@@ -205,30 +205,6 @@ func parseFlags() error {
 		os.Exit(0)
 	}
 
-	if prefixInput != "" {
-		rawPrefixes := strings.Split(prefixInput, ",")
-		for _, prefix := range rawPrefixes {
-			prefix = strings.TrimSpace(prefix)
-			if prefix != "" {
-				prefix = strings.TrimPrefix(prefix, "/")
-				if len(prefix) > 0 && !strings.HasSuffix(prefix, "/") {
-					prefix += "/"
-				}
-				prefixes = append(prefixes, prefix)
-			}
-		}
-	}
-
-	if excludeInput != "" {
-		rawPaths := strings.Split(excludeInput, ",")
-		for _, path := range rawPaths {
-			path = strings.TrimSpace(path)
-			if path != "" {
-				excludePaths = append(excludePaths, path)
-			}
-		}
-	}
-
 	if bucketName == "" {
 		return fmt.Errorf("bucket flags is required")
 	}
@@ -255,6 +231,20 @@ func parseFlags() error {
 	}
 	if !includeDeleteMarkers {
 		reportFilters = append(reportFilters, csvutils.SkipDeleteMarkers)
+	}
+
+	if prefixInput != "" {
+		prefixes = normalizeBucketPaths(prefixInput)
+	}
+
+	if excludeInput != "" {
+		excludePaths = normalizeBucketPaths(excludeInput)
+
+		// Check if user is trying to exclude the root path
+		if len(excludePaths) == 1 && excludePaths[0] == "/" {
+			fmt.Fprintf(os.Stderr, "Error: Cannot exclude root path '/'. This would exclude all objects from scanning.\n")
+			os.Exit(1)
+		}
 	}
 
 	// Add exclude filter as safety net
@@ -286,4 +276,25 @@ func getClientConfig(ctx context.Context) (aws.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func normalizeBucketPaths(s string) []string {
+	var normalized []string
+
+	paths := strings.Split(s, ",")
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			// If user explicitly provided "/", it covers everything
+			if p == "/" {
+				return []string{"/"}
+			}
+			p = strings.TrimPrefix(p, "/")
+			if !strings.HasSuffix(p, "/") {
+				p += "/"
+			}
+			normalized = append(normalized, p)
+		}
+	}
+	return normalized
 }

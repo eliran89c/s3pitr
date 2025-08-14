@@ -141,54 +141,6 @@ func TestIsRootLevelExclusion(t *testing.T) {
 	}
 }
 
-func TestNormalizePrefix(t *testing.T) {
-	testCases := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "already_normalized",
-			input:    "logs/",
-			expected: "logs/",
-		},
-		{
-			name:     "leading_slash",
-			input:    "/logs/",
-			expected: "logs/",
-		},
-		{
-			name:     "no_trailing_slash",
-			input:    "logs",
-			expected: "logs/",
-		},
-		{
-			name:     "both_slashes",
-			input:    "/logs",
-			expected: "logs/",
-		},
-		{
-			name:     "empty_string",
-			input:    "",
-			expected: "",
-		},
-		{
-			name:     "just_slash",
-			input:    "/",
-			expected: "",
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			result := normalizePrefix(tc.input)
-			if result != tc.expected {
-				t.Errorf("Expected %s, got %s", tc.expected, result)
-			}
-		})
-	}
-}
-
 func TestShouldSkipRootFolder(t *testing.T) {
 	testCases := []struct {
 		name         string

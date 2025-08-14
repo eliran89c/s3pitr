@@ -72,18 +72,8 @@ func CreateExcludeFilter(excludePaths []string) ObjectFilterFunc {
 		}
 	}
 
-	normalizedExcludes := make([]string, len(excludePaths))
-	for i, exclude := range excludePaths {
-		exclude = strings.TrimSpace(exclude)
-		exclude = strings.TrimPrefix(exclude, "/")
-		if len(exclude) > 0 && !strings.HasSuffix(exclude, "/") {
-			exclude += "/"
-		}
-		normalizedExcludes[i] = exclude
-	}
-
 	return func(key string, metadata *s3scanner.S3ObjectMetadata) bool {
-		for _, exclude := range normalizedExcludes {
+		for _, exclude := range excludePaths {
 			if strings.HasPrefix(key, exclude) {
 				return false
 			}
