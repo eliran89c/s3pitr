@@ -32,7 +32,8 @@ var (
 	targetRestoreTime  time.Time
 	bucketName         string
 	reportName         string
-	prefix             string
+	prefixes           []string
+	excludePaths       []string
 	maxConcurrentScans int
 	reportFilters      []csvutils.ObjectFilterFunc
 	profile            string
@@ -83,20 +84,28 @@ func main() {
 	defer db.Close()
 
 	spinner := spinner.New(spinner.CharSets[32], 100*time.Millisecond)
-	if prefix == "" {
+	if len(prefixes) == 0 {
 		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v ", bucketName)
 	} else {
-		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefix: %v", bucketName, prefix)
+		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefixes: %v", bucketName, strings.Join(prefixes, ", "))
 	}
 	spinner.Start()
 
+	// Create exclusion matcher for object-level filtering
+	exclusionMatcher := s3scanner.NewExclusionMatcher(excludePaths, prefixes)
+
 	// Scan S3 bucket and store objects in BadgerDB
-	scanResult, err := scanner.Scan(bucketName, prefix, func(obj *s3scanner.S3Object) error {
+	scanResult, err := scanner.Scan(bucketName, prefixes, exclusionMatcher, func(obj *s3scanner.S3Object) error {
 		dbObject := s3scanner.S3ObjectMetadata{}
 		keyBytes := []byte(*obj.Key)
 
 		// skip files created after targetTime
 		if obj.Metadata.LastModified.After(targetRestoreTime) {
+			return nil
+		}
+
+		// skip excluded objects
+		if exclusionMatcher.ShouldSkipObject(*obj.Key) {
 			return nil
 		}
 
@@ -166,7 +175,7 @@ func main() {
 }
 
 func parseFlags() error {
-	var timestampInput, reportNameInput string
+	var timestampInput, reportNameInput, prefixInput, excludeInput string
 	var includeLatest, includeDeleteMarkers, printVer bool
 
 	flagsSet := flag.NewFlagSet("app", flag.ExitOnError)
@@ -177,7 +186,8 @@ func parseFlags() error {
 	flagsSet.StringVar(&reportNameInput, "reportName", "report.csv", "Name of the report file (default: report.csv)")
 	flagsSet.BoolVar(&includeLatest, "include-latest", false, "Include the latest versions of the objects in the report (default: false)")
 	flagsSet.BoolVar(&includeDeleteMarkers, "include-delete-markers", false, "Include delete markers in the report (default: false)")
-	flagsSet.StringVar(&prefix, "prefix", "", "Prefix to filter objects in the report (default: all objects)")
+	flagsSet.StringVar(&prefixInput, "prefix", "", "Comma-separated list of prefixes to filter objects in the report (default: all objects)")
+	flagsSet.StringVar(&excludeInput, "exclude", "", "Comma-separated list of paths to exclude from scanning")
 	flagsSet.StringVar(&profile, "profile", "", "AWS profile to use for credentials")
 	flagsSet.StringVar(&region, "region", "", "AWS region to use")
 	flagsSet.StringVar(&roleArn, "role-arn", "", "AWS IAM role ARN to assume")
@@ -193,14 +203,6 @@ func parseFlags() error {
 		fmt.Println("Version:", version)
 		fmt.Println("Architecture:", arch)
 		os.Exit(0)
-	}
-
-	if prefix != "" {
-		prefix = strings.TrimPrefix(prefix, "/")
-
-		if len(prefix) > 0 && !strings.HasSuffix(prefix, "/") {
-			prefix += "/"
-		}
 	}
 
 	if bucketName == "" {
@@ -231,6 +233,23 @@ func parseFlags() error {
 		reportFilters = append(reportFilters, csvutils.SkipDeleteMarkers)
 	}
 
+	if prefixInput != "" {
+		prefixes = normalizeBucketPaths(prefixInput)
+	}
+
+	if excludeInput != "" {
+		excludePaths = normalizeBucketPaths(excludeInput)
+
+		// Check if user is trying to exclude the root path
+		if len(excludePaths) == 1 && excludePaths[0] == "/" {
+			fmt.Fprintf(os.Stderr, "Error: Cannot exclude root path '/'. This would exclude all objects from scanning.\n")
+			os.Exit(1)
+		}
+	}
+
+	// Add exclude filter as safety net
+	reportFilters = append(reportFilters, csvutils.CreateExcludeFilter(excludePaths))
+
 	return nil
 }
 
@@ -257,4 +276,25 @@ func getClientConfig(ctx context.Context) (aws.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func normalizeBucketPaths(s string) []string {
+	var normalized []string
+
+	paths := strings.Split(s, ",")
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			// If user explicitly provided "/", it covers everything
+			if p == "/" {
+				return []string{"/"}
+			}
+			p = strings.TrimPrefix(p, "/")
+			if !strings.HasSuffix(p, "/") {
+				p += "/"
+			}
+			normalized = append(normalized, p)
+		}
+	}
+	return normalized
 }

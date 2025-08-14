@@ -16,9 +16,10 @@ type BucketStatistics struct {
 }
 
 type bucket struct {
-	name    string
-	root    string
-	folders chan *bucketFolder
+	name             string
+	root             string
+	folders          chan *bucketFolder
+	exclusionMatcher *ExclusionMatcher
 }
 
 type bucketFolder struct {
@@ -27,6 +28,9 @@ type bucketFolder struct {
 }
 
 func (b *bucket) addFolder(prefix string) {
+	if b.exclusionMatcher != nil && b.exclusionMatcher.ShouldSkipRootFolder(prefix) {
+		return
+	}
 	b.folders <- &bucketFolder{prefix: prefix}
 }
 
@@ -52,11 +56,12 @@ func (stats *BucketStatistics) Cost() float32 {
 	return float32(stats.Pages) * listObjectPrice
 }
 
-func newBucket(name, prefix string) *bucket {
+func newBucket(name, prefix string, exclusionMatcher *ExclusionMatcher) *bucket {
 	b := &bucket{
-		name:    name,
-		root:    prefix,
-		folders: make(chan *bucketFolder, 1),
+		name:             name,
+		root:             prefix,
+		folders:          make(chan *bucketFolder, 1),
+		exclusionMatcher: exclusionMatcher,
 	}
 	b.folders <- &bucketFolder{delimiter: "/", prefix: prefix} // manually add the root folder
 	return b

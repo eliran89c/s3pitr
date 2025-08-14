@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	badger "github.com/dgraph-io/badger/v3"
 	"github.com/eliran89c/s3pitr/pkg/s3scanner"
@@ -62,4 +63,21 @@ func SkipDeleteMarkers(key string, metadata *s3scanner.S3ObjectMetadata) bool {
 
 func SkipLatest(key string, metadata *s3scanner.S3ObjectMetadata) bool {
 	return !metadata.IsLatest
+}
+
+func CreateExcludeFilter(excludePaths []string) ObjectFilterFunc {
+	if len(excludePaths) == 0 {
+		return func(key string, metadata *s3scanner.S3ObjectMetadata) bool {
+			return true
+		}
+	}
+
+	return func(key string, metadata *s3scanner.S3ObjectMetadata) bool {
+		for _, exclude := range excludePaths {
+			if strings.HasPrefix(key, exclude) {
+				return false
+			}
+		}
+		return true
+	}
 }
