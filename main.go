@@ -27,13 +27,45 @@ const (
 	localDBName = ".s3pitr"
 )
 
+type PathList []string
+
+func (p *PathList) String() string {
+	return strings.Join(*p, ",")
+}
+
+func (p *PathList) Set(value string) error {
+	if len(*p) == 1 && (*p)[0] == "/" {
+		return nil
+	}
+
+	parts := strings.Split(value, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		if part == "/" {
+			*p = []string{"/"}
+			return nil
+		}
+
+		part = strings.TrimPrefix(part, "/")
+		if !strings.HasSuffix(part, "/") {
+			part += "/"
+		}
+		*p = append(*p, part)
+	}
+	return nil
+}
+
 var (
 	startTime          = time.Now()
 	targetRestoreTime  time.Time
 	bucketName         string
 	reportName         string
-	prefixes           []string
-	excludePaths       []string
+	prefixes           PathList
+	excludePaths       PathList
 	maxConcurrentScans int
 	reportFilters      []csvutils.ObjectFilterFunc
 	profile            string
@@ -87,15 +119,15 @@ func main() {
 	if len(prefixes) == 0 {
 		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v ", bucketName)
 	} else {
-		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefixes: %v", bucketName, strings.Join(prefixes, ", "))
+		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefixes: %v", bucketName, strings.Join([]string(prefixes), ", "))
 	}
 	spinner.Start()
 
 	// Create exclusion matcher for object-level filtering
-	exclusionMatcher := s3scanner.NewExclusionMatcher(excludePaths, prefixes)
+	exclusionMatcher := s3scanner.NewExclusionMatcher([]string(excludePaths), []string(prefixes))
 
 	// Scan S3 bucket and store objects in BadgerDB
-	scanResult, err := scanner.Scan(bucketName, prefixes, exclusionMatcher, func(obj *s3scanner.S3Object) error {
+	scanResult, err := scanner.Scan(bucketName, []string(prefixes), exclusionMatcher, func(obj *s3scanner.S3Object) error {
 		dbObject := s3scanner.S3ObjectMetadata{}
 		keyBytes := []byte(*obj.Key)
 
@@ -175,7 +207,7 @@ func main() {
 }
 
 func parseFlags() error {
-	var timestampInput, reportNameInput, prefixInput, excludeInput string
+	var timestampInput, reportNameInput string
 	var includeLatest, includeDeleteMarkers, printVer bool
 
 	flagsSet := flag.NewFlagSet("app", flag.ExitOnError)
@@ -186,8 +218,8 @@ func parseFlags() error {
 	flagsSet.StringVar(&reportNameInput, "reportName", "report.csv", "Name of the report file (default: report.csv)")
 	flagsSet.BoolVar(&includeLatest, "include-latest", false, "Include the latest versions of the objects in the report (default: false)")
 	flagsSet.BoolVar(&includeDeleteMarkers, "include-delete-markers", false, "Include delete markers in the report (default: false)")
-	flagsSet.StringVar(&prefixInput, "prefix", "", "Comma-separated list of prefixes to filter objects in the report (default: all objects)")
-	flagsSet.StringVar(&excludeInput, "exclude", "", "Comma-separated list of paths to exclude from scanning")
+	flagsSet.Var(&prefixes, "prefix", "Comma-separated list of prefixes to filter objects in the report (default: all objects)")
+	flagsSet.Var(&excludePaths, "exclude", "Comma-separated list of paths to exclude from scanning")
 	flagsSet.StringVar(&profile, "profile", "", "AWS profile to use for credentials")
 	flagsSet.StringVar(&region, "region", "", "AWS region to use")
 	flagsSet.StringVar(&roleArn, "role-arn", "", "AWS IAM role ARN to assume")
@@ -233,22 +265,13 @@ func parseFlags() error {
 		reportFilters = append(reportFilters, csvutils.SkipDeleteMarkers)
 	}
 
-	if prefixInput != "" {
-		prefixes = normalizeBucketPaths(prefixInput)
-	}
-
-	if excludeInput != "" {
-		excludePaths = normalizeBucketPaths(excludeInput)
-
-		// Check if user is trying to exclude the root path
-		if len(excludePaths) == 1 && excludePaths[0] == "/" {
-			fmt.Fprintf(os.Stderr, "Error: Cannot exclude root path '/'. This would exclude all objects from scanning.\n")
-			os.Exit(1)
-		}
+	if len(excludePaths) == 1 && excludePaths[0] == "/" {
+		fmt.Fprintf(os.Stderr, "Error: Cannot exclude root path '/'. This would exclude all objects from scanning.\n")
+		os.Exit(1)
 	}
 
 	// Add exclude filter as safety net
-	reportFilters = append(reportFilters, csvutils.CreateExcludeFilter(excludePaths))
+	reportFilters = append(reportFilters, csvutils.CreateExcludeFilter([]string(excludePaths)))
 
 	return nil
 }
@@ -276,25 +299,4 @@ func getClientConfig(ctx context.Context) (aws.Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func normalizeBucketPaths(s string) []string {
-	var normalized []string
-
-	paths := strings.Split(s, ",")
-	for _, p := range paths {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			// If user explicitly provided "/", it covers everything
-			if p == "/" {
-				return []string{"/"}
-			}
-			p = strings.TrimPrefix(p, "/")
-			if !strings.HasSuffix(p, "/") {
-				p += "/"
-			}
-			normalized = append(normalized, p)
-		}
-	}
-	return normalized
 }

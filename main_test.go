@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestNormalizeBucketPaths(t *testing.T) {
+func TestPathListSet(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    string
@@ -156,7 +156,13 @@ func TestNormalizeBucketPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := normalizeBucketPaths(tc.input)
+			var pathList PathList
+			err := pathList.Set(tc.input)
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+
+			result := []string(pathList)
 
 			// Handle nil vs empty slice comparison
 			if len(result) == 0 && len(tc.expected) == 0 {
@@ -175,8 +181,7 @@ func TestNormalizeBucketPaths(t *testing.T) {
 	}
 }
 
-func TestNormalizeBucketPathsProperties(t *testing.T) {
-	// Property-based tests to verify function invariants
+func TestPathListSetProperties(t *testing.T) {
 	testInputs := []string{
 		"logs",
 		"/logs/",
@@ -190,7 +195,13 @@ func TestNormalizeBucketPathsProperties(t *testing.T) {
 	}
 
 	for _, input := range testInputs {
-		result := normalizeBucketPaths(input)
+		var pathList PathList
+		err := pathList.Set(input)
+		if err != nil {
+			t.Errorf("Unexpected error for input %q: %v", input, err)
+		}
+
+		result := []string(pathList)
 
 		// Property 1: All non-empty results should end with "/"
 		for _, path := range result {
@@ -205,5 +216,41 @@ func TestNormalizeBucketPathsProperties(t *testing.T) {
 				t.Errorf("Input %q produced empty string in result", input)
 			}
 		}
+	}
+}
+
+func TestPathListMultipleSet(t *testing.T) {
+	var pathList PathList
+
+	pathList.Set("logs")
+	pathList.Set("data")
+
+	expected := []string{"logs/", "data/"}
+	result := []string(pathList)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Multiple Set calls: expected %v, got %v", expected, result)
+	}
+}
+
+func TestPathListRootOverride(t *testing.T) {
+	var pathList PathList
+
+	pathList.Set("logs")
+	pathList.Set("data")
+	pathList.Set("/")
+
+	expected := []string{"/"}
+	result := []string(pathList)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Root override: expected %v, got %v", expected, result)
+	}
+
+	pathList.Set("more")
+	result = []string(pathList)
+
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("After root set, additional Set should be ignored: expected %v, got %v", expected, result)
 	}
 }

@@ -54,7 +54,17 @@ This will download the source code, compile it, and install the `s3pitr` binary 
 To use s3pitr, execute the binary with the required flags:
 
 ```bash
+# Basic usage - scan entire bucket
 s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket
+
+# Scan specific prefixes only
+s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket -prefix logs -prefix data
+
+# Scan entire bucket but exclude certain paths
+s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket -exclude temp -exclude cache
+
+# Combine prefixes and exclusions
+s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket -prefix app -exclude app/temp -exclude app/logs
 ```
 
 ### Flags
@@ -64,7 +74,8 @@ s3pitr -timestamp "2023-01-01T12:00:00" -bucket my-bucket
 * `-reportName`: The name of the report file (default: "report.csv").
 * `-include-latest`: By default, the latest versions of objects are excluded from the report. Set this flag to true to include the latest versions in the report. This is useful when you want to copy all the files to a new bucket.
 * `-include-delete-markers`: Controls whether or not to include objects with delete markers in the report. By default, objects with delete markers are excluded from the report, under the assumption that if a file was deleted before the target time, it's not needed for the restore operation. If you want to include delete markers in the report, set this flag to true.
-* `-prefix`: Prefix to filter objects in the report. by default `s3pitr` will scan the entire bucket.
+* `-prefix`: Prefix to filter objects in the report. Can be specified multiple times to scan multiple prefixes (e.g., `-prefix logs -prefix data`). By default `s3pitr` will scan the entire bucket.
+* `-exclude`: Paths to exclude from scanning. Can be specified multiple times to exclude multiple paths (e.g., `-exclude temp -exclude cache`). Use this to skip specific folders or objects during the scan.
 * `-profile`: The AWS profile to use for credentials.
 * `-region`: AWS region to use.
 * `-role-arn`: AWS IAM role ARN to assume.
