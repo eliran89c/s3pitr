@@ -119,7 +119,7 @@ func main() {
 	if len(prefixes) == 0 {
 		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v ", bucketName)
 	} else {
-		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefixes: %v", bucketName, strings.Join([]string(prefixes), ", "))
+		spinner.Prefix = fmt.Sprintf("Scanning bucket: %v with prefixes: %s", bucketName, prefixes)
 	}
 	spinner.Start()
 
